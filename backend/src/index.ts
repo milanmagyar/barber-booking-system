@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import type { MiddlewareHandler } from "hono";
 
 interface DaySchedule {
   start: string;
@@ -22,12 +23,25 @@ interface Barber {
   workSchedule: WorkSchedule;
 }
 
+const API_KEY = "secret-backend-api-key";
 const EXTERNAL_API_KEY =
   "08980fd4d393b390ec1d60a33945ff301e28c9092e660f593d6d182bc8364d2c";
 const EXTERNAL_BARBERS_URL =
   "https://barber-hono-on-vercel.vercel.app/api/v1/barbers";
 
 const app = new Hono();
+
+const authMiddleware: MiddlewareHandler = async (c, next) => {
+  const key = c.req.header("X-API-Key");
+
+  if (key !== API_KEY) {
+    return c.json({ error: "Unauthorized - invalid X-API-Key" }, 401);
+  }
+
+  await next();
+};
+
+app.use("/api/*", authMiddleware);
 
 app.get("/", (c) => {
   return c.text("Hello Hono!");
