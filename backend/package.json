@@ -12,7 +12,8 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.19.11",
-    "hono": "^4.12.9"
+    "hono": "^4.12.9",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@hono/eslint-config": "^2.1.0",

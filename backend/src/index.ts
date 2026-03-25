@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import type { MiddlewareHandler } from "hono";
+import { z } from "zod";
 
 interface DaySchedule {
   start: string;
@@ -158,6 +159,11 @@ const getAvailableSlots = async (barberId: string, dateStr: string) => {
   return slots;
 };
 
+const AvailableSlotsSchema = z.object({
+  barberId: z.uuid(),
+  date: z.iso.date(),
+});
+
 const app = new Hono();
 
 const authMiddleware: MiddlewareHandler = async (c, next) => {
@@ -183,14 +189,25 @@ app.get("/api/barbers", async (c) => {
 });
 
 app.get("/api/available-slots", async (c) => {
-  const barberId = c.req.query("barberId");
-  const date = c.req.query("date");
+  const parsed = AvailableSlotsSchema.safeParse({
+    barberId: c.req.query("barberId"),
+    date: c.req.query("date"),
+  });
 
-  if (!barberId || !date) {
-    return c.json({ error: "barberId and date are required" }, 400);
+  if (!parsed.success) {
+    return c.json(
+      {
+        error: "Validation error",
+        issues: parsed.error.issues.map((issue) => ({
+          name: issue.path.join("."),
+          message: issue.message,
+        })),
+      },
+      400,
+    );
   }
 
-  const slots = await getAvailableSlots(barberId, date);
+  const slots = await getAvailableSlots(parsed.data.barberId, parsed.data.date);
 
   return c.json(slots);
 });
