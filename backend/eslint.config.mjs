@@ -1,4 +1,4 @@
-import baseConfig from '@hono/eslint-config'
+import baseConfig from "@hono/eslint-config";
 
 export default [
   ...baseConfig,
@@ -6,9 +6,9 @@ export default [
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.mjs']
-        }
-      }
-    }
-  }
-]
+          allowDefaultProject: ["eslint.config.mjs"],
+        },
+      },
+    },
+  },
+];
