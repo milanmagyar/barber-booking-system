@@ -346,6 +346,22 @@ app.post("/api/appointments", async (c) => {
   return c.json(appointment, 201);
 });
 
+app.get("/api/appointments", async (c) => {
+  const email = c.req.query("email");
+
+  if (!z.email().safeParse(email).success) {
+    return c.json({ error: "Valid email is required" }, 400);
+  }
+
+  await db.read();
+
+  const appointments = db.data.appointments.filter(
+    (appointment) => appointment.email === email,
+  );
+
+  return c.json(appointments);
+});
+
 serve(
   {
     fetch: app.fetch,
