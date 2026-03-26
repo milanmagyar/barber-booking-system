@@ -362,6 +362,30 @@ app.get("/api/appointments", async (c) => {
   return c.json(appointments);
 });
 
+app.delete("/api/appointments/:id", async (c) => {
+  const id = c.req.param("id");
+
+  if (!z.uuid().safeParse(id).success) {
+    return c.json({ error: "Valid ID is required" }, 400);
+  }
+
+  await db.read();
+
+  const index = db.data.appointments.findIndex(
+    (appointment) => appointment.id === id,
+  );
+
+  if (index === -1) {
+    return c.json({ error: "Appointment not found" }, 404);
+  }
+
+  db.data.appointments.splice(index, 1);
+
+  await db.write();
+
+  return c.json({ success: true, message: "Appointment deleted" });
+});
+
 serve(
   {
     fetch: app.fetch,
