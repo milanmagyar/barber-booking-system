@@ -13,8 +13,15 @@ export function Navbar() {
             <h1 className="text-2xl font-bold text-amber-600">Borbélyüzlet</h1>
           </div>
           <div className="flex gap-8 text-sm font-medium">
-            <Link href="/" className="hover:text-amber-600 transition-colors">Foglalás</Link>
-            <Link href="/my-bookings" className="hover:text-amber-600 transition-colors">Saját foglalásaim</Link>
+            <Link href="/" className="hover:text-amber-600 transition-colors">
+              Foglalás
+            </Link>
+            <Link
+              href="/my-bookings"
+              className="hover:text-amber-600 transition-colors"
+            >
+              Saját foglalásaim
+            </Link>
           </div>
         </div>
       </div>
