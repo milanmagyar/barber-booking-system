@@ -17,6 +17,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch } from "@/lib/api";
 import { CalendarIcon, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { hu } from "date-fns/locale";
@@ -29,13 +31,24 @@ const formatTime = (date: Date) => {
   return format(date, "HH:mm", { locale: hu });
 };
 
+interface Barber {
+  id: string;
+  name: string;
+}
+
 export default function Home() {
   const [selectedBarberId, setSelectedBarberId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedSlot, setSelectedSlot] = useState<string>("");
 
-  const barbers = [{ id: "dsadsa", name: "Alma" }];
-  const selectedBarber = barbers[0];
+  const queryClient = useQueryClient();
+
+  const { data: barbers = [] } = useQuery<Barber[]>({
+    queryKey: ["barbers"],
+    queryFn: () => apiFetch("/api/barbers"),
+  });
+
+  const selectedBarber = barbers.find((b) => b.id === selectedBarberId);
 
   const slotsLoading = false;
   const slots = ["2026-03-26T10:00:00.000Z"];
