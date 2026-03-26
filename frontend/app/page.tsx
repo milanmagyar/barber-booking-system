@@ -50,8 +50,18 @@ export default function Home() {
 
   const selectedBarber = barbers.find((b) => b.id === selectedBarberId);
 
-  const slotsLoading = false;
-  const slots = ["2026-03-26T10:00:00.000Z"];
+  const dateStr = selectedDate.toISOString().split("T")[0];
+  const { data: slots = [], isLoading: slotsLoading } = useQuery<string[]>({
+    queryKey: ["slots", selectedBarberId, dateStr],
+    queryFn: () => {
+      if (!selectedBarberId) {
+        return Promise.resolve([]);
+      }
+
+      return apiFetch(`/api/available-slots?barberId=${selectedBarberId}&date=${dateStr}`);
+    },
+    enabled: !!selectedBarberId,
+  });
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
@@ -109,6 +119,7 @@ export default function Home() {
                     date < new Date(new Date().setHours(0, 0, 0, 0))
                   }
                   autoFocus
+                  timeZone="UTC"
                 />
               </PopoverContent>
             </Popover>
@@ -154,6 +165,33 @@ export default function Home() {
                 </p>
               </div>
             )}
+            {/*<form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <div>
+                <Label htmlFor="email">Email cím</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="pelda@email.com"
+                  {...register("email")}
+                />
+                {errors.email && (
+                  <p className="text-red-500 text-sm mt-1">
+                    {errors.email.message}
+                  </p>
+                )}
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={!selectedSlot || createMutation.isPending}
+                size="lg"
+              >
+                {createMutation.isPending
+                  ? "Foglalás folyamatban..."
+                  : "Időpont lefoglalása"}
+              </Button>
+            </form>*/}
           </CardContent>
         </Card>
       </div>
