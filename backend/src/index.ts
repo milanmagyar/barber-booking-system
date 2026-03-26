@@ -1,5 +1,6 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
+import { cors } from "hono/cors";
 import type { MiddlewareHandler } from "hono";
 import { z } from "zod";
 
@@ -166,6 +167,8 @@ const AvailableSlotsSchema = z.object({
 
 const app = new Hono();
 
+app.use('/api/*', cors());
+
 const authMiddleware: MiddlewareHandler = async (c, next) => {
   const key = c.req.header("X-API-Key");
 
@@ -185,7 +188,7 @@ app.get("/", (c) => {
 app.get("/api/barbers", async (c) => {
   const barbers = await getBarbers();
 
-  return c.json(barbers);
+  return c.json(barbers.map(barber => ({ id: barber.id, name: barber.name })));
 });
 
 app.get("/api/available-slots", async (c) => {
@@ -215,7 +218,7 @@ app.get("/api/available-slots", async (c) => {
 serve(
   {
     fetch: app.fetch,
-    port: 3000,
+    port: 3001,
   },
   (info) => {
     console.log(`Server is running on http://localhost:${info.port}`);
