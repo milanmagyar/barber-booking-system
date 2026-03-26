@@ -1,0 +1,4 @@
+# Ignore all shadcn UI components
+components/ui
+
+AGENTS.md
