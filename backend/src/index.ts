@@ -1,8 +1,11 @@
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { cors } from "hono/cors";
 import type { MiddlewareHandler } from "hono";
+import { cors } from "hono/cors";
+import { Low } from "lowdb";
+import { JSONFile } from "lowdb/node";
 import { z } from "zod";
+import crypto from "crypto";
 
 interface DaySchedule {
   start: string;
@@ -25,6 +28,17 @@ interface Barber {
   workSchedule: WorkSchedule;
 }
 
+interface Appointment {
+  id: string;
+  barberId: string;
+  startTime: string;
+  email: string;
+}
+
+interface Data {
+  appointments: Appointment[];
+}
+
 const API_KEY = "secret-backend-api-key";
 const EXTERNAL_API_KEY =
   "08980fd4d393b390ec1d60a33945ff301e28c9092e660f593d6d182bc8364d2c";
@@ -41,6 +55,33 @@ const DAY_KEYS: (keyof WorkSchedule)[] = [
 ];
 const HOLIDAYS = new Set(["2026-01-01", "2026-03-15", "2026-05-01"]);
 const APPOINTMENT_DURATION_MINUTES = 60;
+
+const db = new Low<Data>(new JSONFile("db.json"), { appointments: [] });
+
+const overlaps = (date1: Date, date2: Date, durationMs: number) => {
+  const start1 = date1.getTime();
+  const end1 = start1 + durationMs;
+  const start2 = date2.getTime();
+  const end2 = start2 + durationMs;
+
+  return start1 < end2 && start2 < end1;
+};
+
+const hasOverlap = async (
+  barberId: string,
+  startDate: Date,
+  durationMs: number,
+) => {
+  await db.read();
+
+  return db.data.appointments.some((appointment) => {
+    if (appointment.barberId !== barberId) {
+      return false;
+    }
+
+    return overlaps(new Date(appointment.startTime), startDate, durationMs);
+  });
+};
 
 const fetchBarbers = async () => {
   const res = await fetch(EXTERNAL_BARBERS_URL, {
@@ -79,7 +120,7 @@ const convertDateToDateString = (date: Date) => {
 };
 
 const isSunday = (date: Date) => {
-  return date.getDay() === 0;
+  return date.getUTCDay() === 0;
 };
 
 const isHoliday = (date: Date) => {
@@ -121,7 +162,7 @@ const getAvailableSlots = async (barberId: string, dateStr: string) => {
     return [];
   }
 
-  const daySchedule = barber.workSchedule[DAY_KEYS[date.getDay()]];
+  const daySchedule = barber.workSchedule[DAY_KEYS[date.getUTCDay()]];
 
   if (!daySchedule) {
     return [];
@@ -134,6 +175,7 @@ const getAvailableSlots = async (barberId: string, dateStr: string) => {
     return [];
   }
 
+  const durationMs = APPOINTMENT_DURATION_MINUTES * 60 * 1000;
   const now = new Date();
   const slots: string[] = [];
 
@@ -143,16 +185,12 @@ const getAvailableSlots = async (barberId: string, dateStr: string) => {
     currentMinutes += APPOINTMENT_DURATION_MINUTES
   ) {
     const slotDate = new Date(
-      Date.UTC(
-        date.getFullYear(),
-        date.getMonth(),
-        date.getDate(),
-        Math.floor(currentMinutes / 60),
-        currentMinutes % 60,
-      ),
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
     );
 
-    if (slotDate > now) {
+    slotDate.setUTCMinutes(currentMinutes);
+
+    if (slotDate > now && !(await hasOverlap(barberId, slotDate, durationMs))) {
       slots.push(slotDate.toISOString());
     }
   }
@@ -165,9 +203,15 @@ const AvailableSlotsSchema = z.object({
   date: z.iso.date(),
 });
 
+const CreateAppointmentSchema = z.object({
+  barberId: z.uuid(),
+  startTime: z.iso.datetime(),
+  email: z.email(),
+});
+
 const app = new Hono();
 
-app.use('/api/*', cors());
+app.use("/api/*", cors());
 
 const authMiddleware: MiddlewareHandler = async (c, next) => {
   const key = c.req.header("X-API-Key");
@@ -188,7 +232,9 @@ app.get("/", (c) => {
 app.get("/api/barbers", async (c) => {
   const barbers = await getBarbers();
 
-  return c.json(barbers.map(barber => ({ id: barber.id, name: barber.name })));
+  return c.json(
+    barbers.map((barber) => ({ id: barber.id, name: barber.name })),
+  );
 });
 
 app.get("/api/available-slots", async (c) => {
@@ -213,6 +259,91 @@ app.get("/api/available-slots", async (c) => {
   const slots = await getAvailableSlots(parsed.data.barberId, parsed.data.date);
 
   return c.json(slots);
+});
+
+app.post("/api/appointments", async (c) => {
+  let body: z.infer<typeof CreateAppointmentSchema>;
+
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: "Invalid JSON" }, 400);
+  }
+
+  const parsed = CreateAppointmentSchema.safeParse(body);
+
+  if (!parsed.success) {
+    return c.json(
+      { error: "Validation error", issues: parsed.error.issues },
+      400,
+    );
+  }
+
+  const { barberId, startTime, email } = parsed.data;
+  const startDate = new Date(startTime);
+
+  if (startDate < new Date()) {
+    return c.json({ error: "Cannot book in the past" }, 400);
+  }
+
+  if (!isWorkingDay(startDate)) {
+    return c.json({ error: "It is not a working day" }, 400);
+  }
+
+  const barber = await getBarber(barberId);
+
+  if (!barber) {
+    return c.json({ error: "Barber not found" }, 404);
+  }
+
+  const dayKey = DAY_KEYS[startDate.getUTCDay()];
+  const daySchedule = barber.workSchedule[dayKey];
+
+  if (!daySchedule) {
+    return c.json(
+      { error: "Appointment time outside barber's work schedule" },
+      400,
+    );
+  }
+
+  const openMin = timeToMinutes(daySchedule.start);
+  const closeMin = timeToMinutes(daySchedule.end);
+  const startMin = startDate.getUTCHours() * 60 + startDate.getUTCMinutes();
+
+  if (
+    startMin < openMin ||
+    startMin + APPOINTMENT_DURATION_MINUTES > closeMin
+  ) {
+    return c.json(
+      { error: "Appointment time outside barber's work schedule" },
+      400,
+    );
+  }
+
+  if (
+    await hasOverlap(
+      barberId,
+      startDate,
+      APPOINTMENT_DURATION_MINUTES * 60 * 1000,
+    )
+  ) {
+    return c.json({ error: "Time slot already taken" }, 409);
+  }
+
+  const appointment: Appointment = {
+    id: crypto.randomUUID(),
+    barberId,
+    startTime: startDate.toISOString(),
+    email,
+  };
+
+  await db.read();
+
+  db.data.appointments.push(appointment);
+
+  await db.write();
+
+  return c.json(appointment, 201);
 });
 
 serve(
