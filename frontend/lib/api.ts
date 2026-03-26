@@ -1,7 +1,10 @@
 const API_URL = "http://localhost:3001";
 const API_KEY = "secret-backend-api-key-2026";
 
-export async function apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+export async function apiFetch<T>(
+  endpoint: string,
+  options: RequestInit = {},
+): Promise<T> {
   const res = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: {

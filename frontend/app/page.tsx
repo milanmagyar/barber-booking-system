@@ -19,7 +19,7 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { CalendarIcon, Clock } from "lucide-react";
 import { format } from "date-fns";
@@ -47,6 +47,13 @@ interface Barber {
   name: string;
 }
 
+interface Appointment {
+  id: string;
+  barberId: string;
+  startTime: string;
+  email: string;
+}
+
 export default function Home() {
   const [selectedBarberId, setSelectedBarberId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -69,12 +76,37 @@ export default function Home() {
         return Promise.resolve([]);
       }
 
-      return apiFetch(`/api/available-slots?barberId=${selectedBarberId}&date=${dateStr}`);
+      return apiFetch(
+        `/api/available-slots?barberId=${selectedBarberId}&date=${dateStr}`,
+      );
     },
     enabled: !!selectedBarberId,
   });
 
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const createMutation = useMutation({
+    mutationFn: (data: {
+      barberId: string;
+      startTime: string;
+      email: string;
+    }) =>
+      apiFetch<Appointment>("/api/appointments", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      alert("Időpont sikeresen lefoglalva!");
+
+      setSelectedSlot("");
+
+      queryClient.invalidateQueries({ queryKey: ["slots"] });
+    },
+  });
+
+  const {
+    register,
+    handleSubmit,
+    formState: { errors },
+  } = useForm({
     resolver: zodResolver(bookingSchema),
   });
 
@@ -83,7 +115,7 @@ export default function Home() {
       return;
     }
 
-    console.log({
+    createMutation.mutate({
       barberId: selectedBarberId,
       startTime: selectedSlot,
       email: data.email,
@@ -192,31 +224,35 @@ export default function Home() {
                 </p>
               </div>
             )}
-            {<form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div>
-                <Label htmlFor="email">Email cím</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="pelda@email.com"
-                  {...register("email")}
-                />
-                {errors.email && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {errors.email.message}
-                  </p>
-                )}
-              </div>
+            {
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                <div>
+                  <Label htmlFor="email">Email cím</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="pelda@email.com"
+                    {...register("email")}
+                  />
+                  {errors.email && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {errors.email.message}
+                    </p>
+                  )}
+                </div>
 
-              <Button
-                type="submit"
-                className="w-full"
-                disabled={!selectedSlot}
-                size="lg"
-              >
-                Időpont lefoglalása
-              </Button>
-            </form>}
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={!selectedSlot || createMutation.isPending}
+                  size="lg"
+                >
+                  {createMutation.isPending
+                    ? "Foglalás folyamatban..."
+                    : "Időpont lefoglalása"}
+                </Button>
+              </form>
+            }
           </CardContent>
         </Card>
       </div>
