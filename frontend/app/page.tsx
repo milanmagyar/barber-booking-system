@@ -17,11 +17,16 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api";
 import { CalendarIcon, Clock } from "lucide-react";
 import { format } from "date-fns";
 import { hu } from "date-fns/locale";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 
 const formatDate = (date: Date) => {
   return format(date, "PPP", { locale: hu });
@@ -30,6 +35,12 @@ const formatDate = (date: Date) => {
 const formatTime = (date: Date) => {
   return format(date, "HH:mm", { locale: hu });
 };
+
+const bookingSchema = z.object({
+  email: z.email("Érvénytelen email cím"),
+});
+
+type BookingForm = z.infer<typeof bookingSchema>;
 
 interface Barber {
   id: string;
@@ -62,6 +73,22 @@ export default function Home() {
     },
     enabled: !!selectedBarberId,
   });
+
+  const { register, handleSubmit, formState: { errors } } = useForm({
+    resolver: zodResolver(bookingSchema),
+  });
+
+  const onSubmit = (data: BookingForm) => {
+    if (!selectedSlot || !selectedBarberId) {
+      return;
+    }
+
+    console.log({
+      barberId: selectedBarberId,
+      startTime: selectedSlot,
+      email: data.email,
+    });
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-12">
@@ -165,7 +192,7 @@ export default function Home() {
                 </p>
               </div>
             )}
-            {/*<form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            {<form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
               <div>
                 <Label htmlFor="email">Email cím</Label>
                 <Input
@@ -184,14 +211,12 @@ export default function Home() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={!selectedSlot || createMutation.isPending}
+                disabled={!selectedSlot}
                 size="lg"
               >
-                {createMutation.isPending
-                  ? "Foglalás folyamatban..."
-                  : "Időpont lefoglalása"}
+                Időpont lefoglalása
               </Button>
-            </form>*/}
+            </form>}
           </CardContent>
         </Card>
       </div>
