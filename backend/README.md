@@ -1,9 +1,10 @@
+# Barber Shop Appointment Booking System – Backend
+
 ## Installation & Running
 
 ### 1. Install dependencies
 
 ```bash
-cd backend
 npm install
 ```
 
