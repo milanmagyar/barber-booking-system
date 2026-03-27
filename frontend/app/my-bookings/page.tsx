@@ -2,8 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { hu } from "date-fns/locale";
 import { Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -11,15 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { apiFetch } from "@/lib/api";
-
-const formatDate = (date: Date) => {
-  return format(date, "PPP", { locale: hu });
-};
-
-const formatTime = (date: Date) => {
-  return format(date, "HH:mm", { locale: hu });
-};
+import { apiFetch, formatDate, formatTime } from "@/lib/utils";
 
 interface Barber {
   id: string;

@@ -2,8 +2,6 @@
 
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { format } from "date-fns";
-import { hu } from "date-fns/locale";
 import { CalendarIcon, Clock } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -25,16 +23,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiFetch } from "@/lib/api";
-import { cn } from "@/lib/utils";
-
-const formatDate = (date: Date) => {
-  return format(date, "PPP", { locale: hu });
-};
-
-const formatTime = (date: Date) => {
-  return format(date, "HH:mm", { locale: hu });
-};
+import { apiFetch, cn, formatDate, formatTime } from "@/lib/utils";
 
 const bookingSchema = z.object({
   email: z.email("Érvénytelen email cím"),
