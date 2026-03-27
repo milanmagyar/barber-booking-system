@@ -141,53 +141,6 @@ const timeToMinutes = (time: string) => {
   return hours * 60 + minutes;
 };
 
-const getAvailableSlots = async (barberId: string, date: Date) => {
-  const barber = await getBarber(barberId);
-
-  if (!barber) {
-    return [];
-  }
-
-  if (!isWorkingDay(date)) {
-    return [];
-  }
-
-  const daySchedule = barber.workSchedule[DAY_KEYS[date.getUTCDay()]];
-
-  if (!daySchedule) {
-    return [];
-  }
-
-  const startMinutes = timeToMinutes(daySchedule.start);
-  const endMinutes = timeToMinutes(daySchedule.end);
-
-  if (startMinutes >= endMinutes || isNaN(startMinutes) || isNaN(endMinutes)) {
-    return [];
-  }
-
-  const durationMs = APPOINTMENT_DURATION_MINUTES * 60 * 1000;
-  const now = new Date();
-  const slots: string[] = [];
-
-  for (
-    let currentMinutes = startMinutes;
-    currentMinutes + APPOINTMENT_DURATION_MINUTES <= endMinutes;
-    currentMinutes += APPOINTMENT_DURATION_MINUTES
-  ) {
-    const slotDate = new Date(
-      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
-    );
-
-    slotDate.setUTCMinutes(currentMinutes);
-
-    if (slotDate > now && !(await hasOverlap(barberId, slotDate, durationMs))) {
-      slots.push(slotDate.toISOString());
-    }
-  }
-
-  return slots;
-};
-
 const ParamsIdSchema = z.object({
   id: z.uuid().openapi({
     param: { name: "id", in: "path" },
@@ -300,10 +253,50 @@ const getSlotsRoute = createRoute({
 app.openapi(getSlotsRoute, async (c) => {
   const { barberId, date: dateStr } = c.req.valid("query");
 
-  const slots = await getAvailableSlots(
-    barberId,
-    convertDateStringToDate(dateStr),
-  );
+  const date = convertDateStringToDate(dateStr);
+
+  const barber = await getBarber(barberId);
+
+  if (!barber) {
+    return c.json([], 200);
+  }
+
+  if (!isWorkingDay(date)) {
+    return c.json([], 200);
+  }
+
+  const daySchedule = barber.workSchedule[DAY_KEYS[date.getUTCDay()]];
+
+  if (!daySchedule) {
+    return c.json([], 200);
+  }
+
+  const startMinutes = timeToMinutes(daySchedule.start);
+  const endMinutes = timeToMinutes(daySchedule.end);
+
+  if (startMinutes >= endMinutes || isNaN(startMinutes) || isNaN(endMinutes)) {
+    return c.json([], 200);
+  }
+
+  const durationMs = APPOINTMENT_DURATION_MINUTES * 60 * 1000;
+  const now = new Date();
+  const slots: string[] = [];
+
+  for (
+    let currentMinutes = startMinutes;
+    currentMinutes + APPOINTMENT_DURATION_MINUTES <= endMinutes;
+    currentMinutes += APPOINTMENT_DURATION_MINUTES
+  ) {
+    const slotDate = new Date(
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+    );
+
+    slotDate.setUTCMinutes(currentMinutes);
+
+    if (slotDate > now && !(await hasOverlap(barberId, slotDate, durationMs))) {
+      slots.push(slotDate.toISOString());
+    }
+  }
 
   return c.json(slots, 200);
 });
