@@ -1,5 +1,5 @@
 const API_URL = "http://localhost:3001";
-const API_KEY = "secret-backend-api-key-2026";
+const API_KEY = "secret-backend-api-key";
 
 interface Appointment {
   id: string;

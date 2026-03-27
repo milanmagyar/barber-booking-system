@@ -17,7 +17,7 @@ export function Navbar() {
               Foglalás
             </Link>
             <Link
-              href="/my-bookings"
+              href="/my-appointments"
               className="hover:text-amber-600 transition-colors"
             >
               Saját foglalásaim

@@ -17,7 +17,7 @@ const emailSchema = z.object({ email: z.email("Érvénytelen email cím") });
 
 type EmailForm = z.infer<typeof emailSchema>;
 
-export default function MyBookings() {
+export default function MyAppointments() {
   const [email, setEmail] = useState("");
   const queryClient = useQueryClient();
 
