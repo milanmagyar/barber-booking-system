@@ -58,7 +58,6 @@ export default function Home() {
   const [selectedBarberId, setSelectedBarberId] = useState<string>("");
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedSlot, setSelectedSlot] = useState<string>("");
-
   const queryClient = useQueryClient();
 
   const { data: barbers = [] } = useQuery<Barber[]>({
@@ -240,7 +239,6 @@ export default function Home() {
                     </p>
                   )}
                 </div>
-
                 <Button
                   type="submit"
                   className="w-full"
