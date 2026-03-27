@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { Scissors } from "lucide-react";
+import Link from "next/link";
 
 export function Navbar() {
   return (

@@ -7,6 +7,21 @@ const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   prettier,
+  {
+    ignores: ["components/ui/**"],
+    rules: {
+      'import/order': [
+        'error',
+        {
+          groups: ['external', 'builtin', 'internal', 'parent', 'sibling', 'index'],
+          alphabetize: {
+            order: 'asc',
+            caseInsensitive: true,
+          },
+        },
+      ],
+    }
+  },
   // Override default ignores of eslint-config-next.
   globalIgnores([
     // Default ignores of eslint-config-next:
