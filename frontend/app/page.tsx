@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/select";
 import { apiFetch } from "@/lib/api";
 import type { Appointment, Barber } from "@/lib/api";
-import { cn, formatDate, formatTime } from "@/lib/utils";
+import { cn, formatDate, formatTime, getUTCDateString } from "@/lib/utils";
 
 const bookingSchema = z.object({
   email: z.email("Érvénytelen email cím"),
@@ -46,7 +46,7 @@ export default function Home() {
 
   const selectedBarber = barbers.find((b) => b.id === selectedBarberId);
 
-  const dateStr = selectedDate.toISOString().split("T")[0];
+  const dateStr = getUTCDateString(selectedDate);
   const { data: slots = [], isLoading: slotsLoading } = useQuery<string[]>({
     queryKey: ["slots", selectedBarberId, dateStr],
     queryFn: () => {

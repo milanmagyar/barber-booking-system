@@ -11,7 +11,11 @@ const formatTime = (date: Date) => {
   return format(date, "HH:mm", { locale: hu });
 };
 
-export { formatDate, formatTime };
+const getUTCDateString = (date: Date) => {
+  return date.toISOString().split("T")[0];
+};
+
+export { formatDate, formatTime, getUTCDateString };
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
