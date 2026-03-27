@@ -1,10 +1,10 @@
 import { serve } from "@hono/node-server";
-import { Hono } from "hono";
+import { OpenAPIHono, createRoute, z } from "@hono/zod-openapi";
+import { Scalar } from "@scalar/hono-api-reference";
 import type { MiddlewareHandler } from "hono";
 import { cors } from "hono/cors";
 import { Low } from "lowdb";
 import { JSONFile } from "lowdb/node";
-import { z } from "zod";
 import crypto from "crypto";
 
 interface DaySchedule {
@@ -132,10 +132,6 @@ const isWorkingDay = (date: Date) => {
 };
 
 const timeToMinutes = (time: string) => {
-  if (typeof time !== "string") {
-    return NaN;
-  }
-
   const [hours, minutes] = time.split(":").map(Number);
 
   if (isNaN(hours) || isNaN(minutes)) {
@@ -145,16 +141,10 @@ const timeToMinutes = (time: string) => {
   return hours * 60 + minutes;
 };
 
-const getAvailableSlots = async (barberId: string, dateStr: string) => {
+const getAvailableSlots = async (barberId: string, date: Date) => {
   const barber = await getBarber(barberId);
 
   if (!barber) {
-    return [];
-  }
-
-  const date = convertDateStringToDate(dateStr);
-
-  if (isNaN(date.getTime())) {
     return [];
   }
 
@@ -198,26 +188,63 @@ const getAvailableSlots = async (barberId: string, dateStr: string) => {
   return slots;
 };
 
-const AvailableSlotsSchema = z.object({
-  barberId: z.uuid(),
-  date: z.iso.date(),
+const ParamsIdSchema = z.object({
+  id: z.uuid().openapi({
+    param: { name: "id", in: "path" },
+    example: "123e4567-e89b-12d3-a456-426614174000",
+  }),
 });
 
-const CreateAppointmentSchema = z.object({
-  barberId: z.uuid(),
-  startTime: z.iso.datetime(),
-  email: z.email(),
-});
+const AppointmentSchema = z
+  .object({
+    id: z.uuid(),
+    barberId: z.uuid(),
+    startTime: z.iso.datetime(),
+    email: z.email(),
+  })
+  .openapi("Appointment");
 
-const app = new Hono();
+const ErrorSchema = z
+  .object({
+    success: z.boolean(),
+    error: z.string(),
+    validationErrors: z
+      .array(z.object({ name: z.string(), message: z.string() }))
+      .optional(),
+  })
+  .openapi("Error");
+
+const app = new OpenAPIHono({
+  defaultHook: (result, c) => {
+    if (!result.success && result.error.name === "ZodError") {
+      return c.json(
+        {
+          success: false,
+          error: "Validation Error",
+          validationErrors: result.error.issues.map((issue) => ({
+            field: issue.path.join("."),
+            message: issue.message,
+          })),
+        },
+        400,
+      );
+    }
+  },
+});
 
 app.use("/api/*", cors());
+
+app.openAPIRegistry.registerComponent("securitySchemes", "ApiKeyAuth", {
+  type: "apiKey",
+  in: "header",
+  name: "X-API-Key",
+});
 
 const authMiddleware: MiddlewareHandler = async (c, next) => {
   const key = c.req.header("X-API-Key");
 
   if (key !== API_KEY) {
-    return c.json({ error: "Unauthorized - invalid X-API-Key" }, 401);
+    return c.json({ success: false, error: "Invalid X-API-Key" }, 401);
   }
 
   await next();
@@ -225,99 +252,120 @@ const authMiddleware: MiddlewareHandler = async (c, next) => {
 
 app.use("/api/*", authMiddleware);
 
-app.get("/", (c) => {
-  return c.text("Hello Hono!");
+const getBarbersRoute = createRoute({
+  method: "get",
+  path: "/api/barbers",
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: z.array(z.object({ id: z.string(), name: z.string() })),
+        },
+      },
+      description: "List barbers",
+    },
+  },
 });
 
-app.get("/api/barbers", async (c) => {
+app.openapi(getBarbersRoute, async (c) => {
   const barbers = await getBarbers();
 
   return c.json(
     barbers.map((barber) => ({ id: barber.id, name: barber.name })),
+    200,
   );
 });
 
-app.get("/api/available-slots", async (c) => {
-  const parsed = AvailableSlotsSchema.safeParse({
-    barberId: c.req.query("barberId"),
-    date: c.req.query("date"),
-  });
-
-  if (!parsed.success) {
-    return c.json(
-      {
-        error: "Validation error",
-        issues: parsed.error.issues.map((issue) => ({
-          name: issue.path.join("."),
-          message: issue.message,
-        })),
-      },
-      400,
-    );
-  }
-
-  const slots = await getAvailableSlots(parsed.data.barberId, parsed.data.date);
-
-  return c.json(slots);
+const getSlotsRoute = createRoute({
+  method: "get",
+  path: "/api/available-slots",
+  request: {
+    query: z.object({
+      barberId: z.uuid(),
+      date: z.iso.date(),
+    }),
+  },
+  responses: {
+    200: {
+      content: { "application/json": { schema: z.array(z.iso.datetime()) } },
+      description: "Available slots",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "Validation Error",
+    },
+  },
 });
 
-app.post("/api/appointments", async (c) => {
-  let body: z.infer<typeof CreateAppointmentSchema>;
+app.openapi(getSlotsRoute, async (c) => {
+  const { barberId, date: dateStr } = c.req.valid("query");
 
-  try {
-    body = await c.req.json();
-  } catch {
-    return c.json({ error: "Invalid JSON" }, 400);
-  }
+  const slots = await getAvailableSlots(
+    barberId,
+    convertDateStringToDate(dateStr),
+  );
 
-  const parsed = CreateAppointmentSchema.safeParse(body);
+  return c.json(slots, 200);
+});
 
-  if (!parsed.success) {
-    return c.json(
-      { error: "Validation error", issues: parsed.error.issues },
-      400,
-    );
-  }
+const createAppointmentRoute = createRoute({
+  method: "post",
+  path: "/api/appointments",
+  request: {
+    body: {
+      content: {
+        "application/json": { schema: AppointmentSchema.omit({ id: true }) },
+      },
+    },
+  },
+  responses: {
+    201: {
+      content: { "application/json": { schema: AppointmentSchema } },
+      description: "Created",
+    },
+    400: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "Bad Request",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "Not Found",
+    },
+    409: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "Conflict",
+    },
+  },
+});
 
-  const { barberId, startTime, email } = parsed.data;
+app.openapi(createAppointmentRoute, async (c) => {
+  const { barberId, startTime, email } = c.req.valid("json");
   const startDate = new Date(startTime);
 
   if (startDate < new Date()) {
-    return c.json({ error: "Cannot book in the past" }, 400);
+    return c.json({ success: false, error: "Cannot book in the past" }, 400);
   }
 
   if (!isWorkingDay(startDate)) {
-    return c.json({ error: "It is not a working day" }, 400);
+    return c.json({ success: false, error: "Not a working day" }, 400);
   }
 
   const barber = await getBarber(barberId);
 
   if (!barber) {
-    return c.json({ error: "Barber not found" }, 404);
+    return c.json({ success: false, error: "Barber not found" }, 404);
   }
 
   const dayKey = DAY_KEYS[startDate.getUTCDay()];
   const daySchedule = barber.workSchedule[dayKey];
-
-  if (!daySchedule) {
-    return c.json(
-      { error: "Appointment time outside barber's work schedule" },
-      400,
-    );
-  }
-
-  const openMin = timeToMinutes(daySchedule.start);
-  const closeMin = timeToMinutes(daySchedule.end);
   const startMin = startDate.getUTCHours() * 60 + startDate.getUTCMinutes();
 
   if (
-    startMin < openMin ||
-    startMin + APPOINTMENT_DURATION_MINUTES > closeMin
+    !daySchedule ||
+    startMin < timeToMinutes(daySchedule.start) ||
+    startMin + APPOINTMENT_DURATION_MINUTES > timeToMinutes(daySchedule.end)
   ) {
-    return c.json(
-      { error: "Appointment time outside barber's work schedule" },
-      400,
-    );
+    return c.json({ success: false, error: "Outside work schedule" }, 400);
   }
 
   if (
@@ -327,7 +375,7 @@ app.post("/api/appointments", async (c) => {
       APPOINTMENT_DURATION_MINUTES * 60 * 1000,
     )
   ) {
-    return c.json({ error: "Time slot already taken" }, 409);
+    return c.json({ success: false, error: "Time slot taken" }, 409);
   }
 
   const appointment: Appointment = {
@@ -346,12 +394,39 @@ app.post("/api/appointments", async (c) => {
   return c.json(appointment, 201);
 });
 
-app.get("/api/appointments", async (c) => {
-  const email = c.req.query("email");
+const getAppointmentsByEmailRoute = createRoute({
+  method: "get",
+  path: "/api/appointments",
+  request: {
+    query: z.object({
+      email: z.email().openapi({
+        example: "customer@example.com",
+        description: "The email address associated with the appointments",
+      }),
+    }),
+  },
+  responses: {
+    200: {
+      content: {
+        "application/json": {
+          schema: z.array(AppointmentSchema),
+        },
+      },
+      description: "Retrieve appointments for a specific email",
+    },
+    400: {
+      content: {
+        "application/json": {
+          schema: ErrorSchema,
+        },
+      },
+      description: "Invalid email format",
+    },
+  },
+});
 
-  if (!z.email().safeParse(email).success) {
-    return c.json({ error: "Valid email is required" }, 400);
-  }
+app.openapi(getAppointmentsByEmailRoute, async (c) => {
+  const { email } = c.req.valid("query");
 
   await db.read();
 
@@ -359,15 +434,29 @@ app.get("/api/appointments", async (c) => {
     (appointment) => appointment.email === email,
   );
 
-  return c.json(appointments);
+  return c.json(appointments, 200);
 });
 
-app.delete("/api/appointments/:id", async (c) => {
-  const id = c.req.param("id");
+const deleteAppointmentRoute = createRoute({
+  method: "delete",
+  path: "/api/appointments/{id}",
+  request: { params: ParamsIdSchema },
+  responses: {
+    200: {
+      content: {
+        "application/json": { schema: z.object({ success: z.boolean() }) },
+      },
+      description: "Deleted",
+    },
+    404: {
+      content: { "application/json": { schema: ErrorSchema } },
+      description: "Not Found",
+    },
+  },
+});
 
-  if (!z.uuid().safeParse(id).success) {
-    return c.json({ error: "Valid ID is required" }, 400);
-  }
+app.openapi(deleteAppointmentRoute, async (c) => {
+  const { id } = c.req.valid("param");
 
   await db.read();
 
@@ -376,22 +465,25 @@ app.delete("/api/appointments/:id", async (c) => {
   );
 
   if (index === -1) {
-    return c.json({ error: "Appointment not found" }, 404);
+    return c.json({ success: false, error: "Not found" }, 404);
   }
 
   db.data.appointments.splice(index, 1);
 
   await db.write();
 
-  return c.json({ success: true, message: "Appointment deleted" });
+  return c.json({ success: true }, 200);
 });
 
-serve(
-  {
-    fetch: app.fetch,
-    port: 3001,
-  },
-  (info) => {
-    console.log(`Server is running on http://localhost:${info.port}`);
-  },
-);
+app.doc("/doc", {
+  openapi: "3.0.0",
+  info: { version: "1.0.0", title: "Barber API" },
+  security: [{ ApiKeyAuth: [] }],
+});
+
+app.get("/reference", Scalar({ url: "/doc" }));
+
+serve({ fetch: app.fetch, port: 3001 }, (info) => {
+  console.log(`Server: http://localhost:${info.port}`);
+  console.log(`Docs: http://localhost:${info.port}/reference`);
+});
