@@ -9,19 +9,9 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { apiFetch, formatDate, formatTime } from "@/lib/utils";
-
-interface Barber {
-  id: string;
-  name: string;
-}
-
-interface Appointment {
-  id: string;
-  barberId: string;
-  startTime: string;
-  email: string;
-}
+import { apiFetch } from "@/lib/api";
+import type { Appointment, Barber } from "@/lib/api";
+import { formatDate, formatTime } from "@/lib/utils";
 
 const emailSchema = z.object({ email: z.email("Érvénytelen email cím") });
 

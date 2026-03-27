@@ -10,17 +10,24 @@ const eslintConfig = defineConfig([
   {
     ignores: ["components/ui/**"],
     rules: {
-      'import/order': [
-        'error',
+      "import/order": [
+        "error",
         {
-          groups: ['external', 'builtin', 'internal', 'parent', 'sibling', 'index'],
+          groups: [
+            "external",
+            "builtin",
+            "internal",
+            "parent",
+            "sibling",
+            "index",
+          ],
           alphabetize: {
-            order: 'asc',
+            order: "asc",
             caseInsensitive: true,
           },
         },
       ],
-    }
+    },
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([

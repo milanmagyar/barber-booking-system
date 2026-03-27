@@ -23,25 +23,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { apiFetch, cn, formatDate, formatTime } from "@/lib/utils";
+import { apiFetch } from "@/lib/api";
+import type { Appointment, Barber } from "@/lib/api";
+import { cn, formatDate, formatTime } from "@/lib/utils";
 
 const bookingSchema = z.object({
   email: z.email("Érvénytelen email cím"),
 });
 
 type BookingForm = z.infer<typeof bookingSchema>;
-
-interface Barber {
-  id: string;
-  name: string;
-}
-
-interface Appointment {
-  id: string;
-  barberId: string;
-  startTime: string;
-  email: string;
-}
 
 export default function Home() {
   const [selectedBarberId, setSelectedBarberId] = useState<string>("");
